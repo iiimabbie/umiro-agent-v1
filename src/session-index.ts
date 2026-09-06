@@ -151,17 +151,6 @@ function toolDocuments(sessionId: string, event: ToolHistoryEvent, ordinal: numb
     role: "assistant",
     text: inputText,
   }];
-  const resultChunks = splitText(event.result || "(no textual output)");
-  for (let index = 0; index < resultChunks.length; index++) {
-    documents.push({
-      ...common,
-      id: createSearchDocumentId("tool-result", sessionId, event.id, index),
-      sourceType: "tool_result",
-      ordinal: index,
-      role: "tool",
-      text: `Tool: ${event.tool}\nStatus: ${event.isError ? "failed" : "succeeded"}\nResult chunk ${index + 1}/${resultChunks.length}:\n${resultChunks[index]}`,
-    });
-  }
   const bounded = event.result.replace(/\s+/g, " ").trim();
   documents.push({
     ...common,
@@ -253,7 +242,7 @@ export function reconcileSessionIndex(
     }
 
     const toolDocs = toolHistory.flatMap((event, ordinal) => toolDocuments(sessionId, event, ordinal));
-    for (const sourceType of ["tool_call", "tool_result", "tool_evidence_summary"] as const) {
+    for (const sourceType of ["tool_call", "tool_evidence_summary"] as const) {
       const docs = toolDocs.filter(doc => doc.sourceType === sourceType);
       if (docs.length > 0) ingestSearchDocuments(docs);
     }

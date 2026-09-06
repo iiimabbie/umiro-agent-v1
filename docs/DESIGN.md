@@ -1295,16 +1295,23 @@ SQLite 全部都是**可重建的 projection**。
    未遮罩原文仍只存在 durable source。
 
 3. **哪些來源不進向量索引。**
-   `NON_EMBEDDED_SOURCE_TYPES` 目前是 `tool_call`、`tool_result`、`tool_evidence_summary`
-   三種：這些文件照常寫入 FTS，但不建 embedding job，
-   `embedding_status` 記為 `skipped`。
+   `NON_EMBEDDED_SOURCE_TYPES` 目前是 `tool_call`、`tool_evidence_summary`、`owner`、`memory`：
+   這些文件照常寫入 FTS，但不建 embedding job，`embedding_status` 記為 `skipped`。
 
-   **工具活動整條不進向量索引。** `tool_result` 量大而語意檢索價值低；
+   **工具活動整條不進向量索引。**
    `tool_call` 存的是 shell script、程式碼與 JSON，這類文字的向量依語法聚類而非依意圖；
    `tool_evidence_summary` 雖然是為語意入口而生的摘要，但它與 `tool_call` 各佔待嵌入總量的近四成，
    而上游配額以「請求次數」計價——筆數而非長度決定成本。
    工具活動的檢索入口因此完全交給 FTS 關鍵字搜尋，
    而 `tool_evidence_summary` 仍記錄哪個工具、何時執行、輸出為何，只是不再產生向量。
+
+   **工具的原始輸出完全不進索引。** `tool_evidence_summary` 是工具輸出唯一可搜尋的形式。
+   原始輸出切塊後曾佔索引 97% 的體積與 84% 的文件數，而它能提供的關鍵字命中，
+   節錄本身已經涵蓋；多出來的部分是同一份輸出的重複投影，只會與真正的對話內容爭奪結果名額。
+
+   **`OWNER.md` 與 `MEMORY.md` 不進向量。** 兩者每輪整份內嵌進 system prompt，
+   向量只能回傳讀者手上已有的內容。`PEOPLE.md` 不在此列——它超過 `prompt.peopleInlineLimit`，
+   prompt 只帶 index，`memory_search` 是它向量的真實讀者。
 
 
 4. **去重只依 identity/hash，不用 cosine 相似度刪資料**；不同時間的相似事件都會保留。

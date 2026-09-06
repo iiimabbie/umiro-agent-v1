@@ -24,7 +24,7 @@ const MAX_EMBED_ATTEMPTS = 5;
  * scarce resource, so it is not spent on documents whose vectors nothing reads. All of them
  * stay in FTS and remain findable by keyword.
  *
- * Tool activity is excluded in all three of its forms. Nobody searches by meaning for which
+ * Tool activity is excluded in both of its indexed forms. Nobody searches by meaning for which
  * tool ran; they search for a command, a path or an error, which is keyword work. Whatever
  * mattered in a tool's output is restated in the reply that followed it, and that reply is
  * an embedded session message — so a tool vector is a second, worse copy of something the
@@ -32,8 +32,11 @@ const MAX_EMBED_ATTEMPTS = 5;
  *
  * - `tool_call`: the arguments a tool was invoked with — shell scripts, code and JSON, whose
  *   vectors cluster by syntax rather than by intent.
- * - `tool_result`: bulky raw output, chunked when long.
- * - `tool_evidence_summary`: a bounded excerpt of that output, one per tool event.
+ * - `tool_evidence_summary`: a bounded excerpt of the output, one per tool event. This is the
+ *   only searchable form of a tool's output; raw results are not indexed at all, because the
+ *   excerpt already carries what a keyword search needs and the full text is an order of
+ *   magnitude larger than every other source combined.
+ *
  * `owner` and `memory` are excluded for the opposite reason: `OWNER.md` and `MEMORY.md` are
  * inlined into the system prompt unconditionally on every turn, so a vector can only return
  * what the reader is already holding. Auto recall excludes them by source type as well, and
@@ -44,7 +47,7 @@ const MAX_EMBED_ATTEMPTS = 5;
  * an index rather than the text, and `memory_search` is a real reader of its vectors.
  */
 const NON_EMBEDDED_SOURCE_TYPES = new Set<SearchSourceType>([
-  "tool_call", "tool_result", "tool_evidence_summary",
+  "tool_call", "tool_evidence_summary",
   "owner", "memory",
 ]);
 
@@ -75,7 +78,6 @@ export type SearchSourceType =
   | "conversation_window"
   | "compact_summary"
   | "tool_call"
-  | "tool_result"
   | "tool_evidence_summary"
   | "diary"
   | "people"
@@ -465,7 +467,7 @@ function countJobBacklog(db: ReturnType<typeof getDb>): { remaining: number; exh
  * would sink a workspace's memory and diary behind thousands of tool-call documents.
  */
 const EMBED_PRIORITY_SQL = `CASE d.source_type
-  WHEN 'owner' THEN 0 WHEN 'memory' THEN 0 WHEN 'people' THEN 0
+  WHEN 'people' THEN 0
   WHEN 'diary' THEN 1
   WHEN 'compact_summary' THEN 2
   WHEN 'session_message' THEN 3 WHEN 'conversation_window' THEN 3
@@ -744,7 +746,7 @@ type SearchRow = {
 
 const SESSION_SOURCE_TYPES = new Set<SearchSourceType>([
   "session_message", "conversation_window", "compact_summary",
-  "tool_call", "tool_result", "tool_evidence_summary", "attachment",
+  "tool_call", "tool_evidence_summary", "attachment",
 ]);
 const DURABLE_SOURCE_TYPES = new Set<SearchSourceType>([
   "diary", "people", "memory", "owner",

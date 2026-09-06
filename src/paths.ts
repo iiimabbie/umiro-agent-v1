@@ -27,6 +27,12 @@ export const PLUGIN_CONFIG_DIR = resolve(WORKSPACE_CONFIG_DIR, "plugins");
  * 產出的報表／HTML、暫存檔。不要再另開 `pages/`、`tmp/` 之類的同級目錄。
  */
 export const ATTACHMENTS_DIR = resolve(WORKSPACE_DIR, "attachments");
+/**
+ * 附件索引的內部儲存：下載的原檔、inline 圖片與 OCR cache。
+ * 放在 config 下而不是 attachments 下，是因為 attachments 是使用者的交付區——
+ * 雜湊分片目錄對使用者沒有意義，混在裡面只會讓人不知道哪些檔案可以自己動。
+ */
+export const ATTACHMENT_INDEX_DIR = resolve(WORKSPACE_CONFIG_DIR, "attachment-index");
 
 /**
  * 全域唯一的回收桶。刪除一律 `mv` 到這裡，不用 `rm`。

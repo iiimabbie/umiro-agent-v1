@@ -9,7 +9,17 @@ const DB_PATH = process.env.UMIRO_DB_PATH ?? resolve(WORKSPACE_CONFIG_DIR, "umir
 
 let db: Database.Database | null = null;
 
-/** 向量表名稱（cosine 版）。embedding.ts 一律走這張。 */
+/**
+ * 向量表名稱（cosine 版）。embedding.ts 一律走這張。
+ *
+ * 這張表沒有 key 欄位，靠 rowid 對應回文件——而那個 rowid 是 `search_documents.rowid`，
+ * 也就是 `search_document_embeddings.document_rowid` 這一欄，**不是** embeddings 那張表
+ * 自己的 rowid。兩者是不同的數列，寫成 `WHERE rowid IN (SELECT rowid FROM
+ * search_document_embeddings)` 會刪掉毫不相干的向量，而且不會報錯。
+ *
+ * 另外 `sqlite3` CLI 載不到 vec0：碰這張表的語句會 parse error，但同一個交易裡後續的語句
+ * 照跑照 commit，留下 metadata 已刪、向量還在的不一致狀態。維運要動它就整段走 Node。
+ */
 export const SEARCH_DOCUMENT_VEC_TABLE = "search_document_vectors_vec_cos";
 
 

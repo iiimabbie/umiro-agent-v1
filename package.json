@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "typecheck:scripts": "tsc --noEmit -p scripts/tsconfig.json",
     "attachment-gc": "tsx scripts/attachment-gc.ts",
-    "test": "UMIRO_CONFIG_PATH=tests/fixtures/config.yaml tsx --test tests/*.test.ts scripts/test-{openai,llm}-*.ts"
+    "test": "UMIRO_CONFIG_PATH=tests/fixtures/config.yaml tsx --test --test-concurrency=2 tests/*.test.ts scripts/test-{openai,llm}-*.ts",
+    "embed-status": "tsx scripts/embed-status.ts"
   },
   "keywords": [],
   "author": "iiimabbie",

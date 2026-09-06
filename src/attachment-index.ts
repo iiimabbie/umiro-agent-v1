@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSy
 import { basename, extname, resolve } from "node:path";
 import { getDb } from "./db.js";
 import { loadConfig } from "./config.js";
-import { ARCHIVE_DIR, ATTACHMENTS_DIR, SESSIONS_DIR } from "./paths.js";
+import { ARCHIVE_DIR, ATTACHMENT_INDEX_DIR, SESSIONS_DIR } from "./paths.js";
 import { createSearchDocumentId, ingestSearchDocuments } from "./search-index.js";
 import { logger } from "./logger.js";
 import type { AttachmentReference } from "./types.js";
@@ -251,7 +251,7 @@ export function registerInlineImageAttachments(
       }
       const hash = sha256(data);
       const extension = extensionFor(image.mediaType, null);
-      const directory = resolve(ATTACHMENTS_DIR, "search-index", "inline", hash.slice(0, 2));
+      const directory = resolve(ATTACHMENT_INDEX_DIR, "inline", hash.slice(0, 2));
       mkdirSync(directory, { recursive: true });
       const path = resolve(directory, `${hash.slice(0, 24)}${extension}`);
       try { writeFileSync(path, data, { flag: "wx" }); }
@@ -387,7 +387,7 @@ async function downloadAttachment(row: AttachmentRow): Promise<{ path: string; c
   const data = response.body;
   const contentType = response.headers["content-type"]?.split(";")[0].trim() || row.content_type;
   const hash = sha256(data);
-  const directory = resolve(ATTACHMENTS_DIR, "search-index", hash.slice(0, 2));
+  const directory = resolve(ATTACHMENT_INDEX_DIR, hash.slice(0, 2));
   mkdirSync(directory, { recursive: true });
   const original = safeFilename(row.original_name || undefined, `attachment${extensionFor(contentType, row.original_name)}`);
   const path = resolve(directory, `${hash.slice(0, 16)}-${original}`);
@@ -400,7 +400,7 @@ let ocrWorkerPromise: Promise<Worker> | undefined;
 
 async function getOcrWorker(): Promise<Worker> {
   if (!ocrWorkerPromise) {
-    const cachePath = resolve(ATTACHMENTS_DIR, "search-index", "ocr-cache");
+    const cachePath = resolve(ATTACHMENT_INDEX_DIR, "ocr-cache");
     mkdirSync(cachePath, { recursive: true });
     ocrWorkerPromise = createWorker("eng+chi_tra", undefined, { cachePath }).catch(error => {
       ocrWorkerPromise = undefined;
@@ -707,7 +707,7 @@ function statSafe(path: string): ReturnType<typeof statSync> | undefined {
 export function collectAttachmentGarbage(options: { retentionDays?: number; dryRun?: boolean } = {}): AttachmentGcReport {
   const retentionDays = Math.max(1, Math.floor(options.retentionDays ?? 30));
   const dryRun = options.dryRun !== false;
-  const root = resolve(ATTACHMENTS_DIR, "search-index");
+  const root = ATTACHMENT_INDEX_DIR;
   const refs = collectReferencedLocalPaths();
   const cutoff = Date.now() - retentionDays * 86_400_000;
   const report: AttachmentGcReport = { scannedFiles: 0, referencedFiles: 0, orphanFiles: 0, orphanBytes: 0, deletedFiles: 0, dryRun };
