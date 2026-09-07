@@ -5,6 +5,7 @@ export type DiscordQueueMode = "followup" | "steer";
 export interface PendingRunInput {
   message: Message;
   images?: string[];
+  files?: Array<{ url: string; name: string; contentType: string; size?: number }>;
   /** Discord snowflake or another monotonically sortable transport id. */
   order: string;
 }

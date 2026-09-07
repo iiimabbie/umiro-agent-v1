@@ -45,7 +45,11 @@ export function normalizeToolCalls(value: unknown): LlmToolCall[] {
 }
 function contentToWire(content: LlmContent): OpenAIContent {
   if (typeof content === "string") return content;
-  return content.map(part => part.type === "text" ? part : { type: "image_url", image_url: { url: part.url, ...(part.detail ? { detail: part.detail } : {}) } });
+  return content.map(part => {
+    if (part.type === "text") return part;
+    if (part.type === "file") throw new Error("OpenAI Chat Completions does not support direct file input");
+    return { type: "image_url", image_url: { url: part.url, ...(part.detail ? { detail: part.detail } : {}) } };
+  });
 }
 function messageToWire(message: LlmMessage): OpenAIMessage {
   if (message.role === "system") return message;

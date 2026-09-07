@@ -122,7 +122,7 @@ provider 的 wire format 差異全部關在 `llm/adapters/` 裡。
 ## Agent Loop
 
 `src/agent.ts` — 核心循環，只使用 `src/llm/types.ts` 的 normalized request/response；
-`src/llm/client.ts` 依 active profile 選擇 adapter。第一個正式 adapter 是 `openai_chat_completions`。
+`src/llm/client.ts` 依 active profile 選擇 adapter。正式 interactive adapters 包含 `openai_chat_completions` 與 `openai_responses`。
 
 單輪流程：
 
@@ -153,7 +153,7 @@ attachment vision，以及 hosted web/image/code capability 都沿用這份 prof
 `/model` 只更新目前 Discord session 的 model 與 reasoning effort，
 不改 connection profile 的 protocol、endpoint、auth、capability，也不影響其他 session。
 
-OpenAI Chat adapter 依 profile 的 `tokenLimitField` 選擇 `max_completion_tokens` 或 `max_tokens`。
+OpenAI Chat adapter 依 profile 的 `tokenLimitField` 選擇 `max_completion_tokens` 或 `max_tokens`。OpenAI Responses adapter 則使用 `instructions`、conversation input items、`function_call`／`function_call_output` 與 `max_output_tokens`，支援 `input_image` 與 base64 `input_file`，並將 output items、usage 與 incomplete reason 正規化成同一份 normalized contract。
 `reasoningEffort: default` 不送 reasoning 欄位，其餘值以 `reasoning_effort` 傳給相容 endpoint。
 它只依賴 OpenAI-compatible Chat Completions 的公開 wire contract：文字／圖片 content parts、function tools、
 `tool_call_id` 對應、finish reason 與 token usage；不假設任何特定 gateway、帳號輪替或私有延伸。
@@ -278,6 +278,7 @@ tool call ID、執行時間、工具名稱、完整 input、完整文字 result�
 - `ask(prompt, options)` — 主入口。prompt 為 null 時從 session 尾部取（Discord 用）
 - `generateLlmResponse(request, profile)` — normalized client；依 profile protocol 選 adapter
 - `OpenAIChatAdapter.generate(...)` — Chat Completions wire mapping、tool arguments 與 usage 正規化
+- `OpenAIResponsesAdapter.generate(...)` — Responses input/output items、function call/result、usage 與 incomplete reason 正規化
 - `postLlmJson(...)` — auth、timeout、retry 與 HTTP error boundary
 - `estimateTokens(msg)` — 粗估 token 數
 - `trimToTokenBudget(messages, maxTokens)` — token-based 歷史裁切
@@ -1437,6 +1438,8 @@ OCR、vision 與文件抽取各自保存 stage status：已成功的結果立即
 使用 `officeparser` 產生文字與內嵌圖片 OCR。
 `pdfjs-dist` 與 `qs` 透過 lockfile override 固定至已修補版本；
 升級 override 後必須在乾淨安裝上跑 PDF extraction fixture，且 production audit 必須為零漏洞。
+
+Discord 當輪上傳或回覆引用的 PDF，在 active profile 使用 `openai_responses` 時，另以 base64 `input_file` 直接送入聊天模型；這條即時理解路徑保留版面、表格與圖像資訊，單檔下載上限為 20 MiB。原本的本機抽取、OCR、切塊與搜尋索引仍照常執行，供跨輪與跨日 recall 使用。不支援 `input_file` 的協議不會收到文件 binary，而是維持背景索引 fallback。
 處理邊界包含下載大小、解壓 bytes、ZIP entry、spreadsheet cell 與 abort timeout；
 失敗會保留原因並依退避策略重試。
 

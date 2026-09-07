@@ -19,7 +19,8 @@ export interface LlmProfile {
 
 export type LlmTextPart = { type: "text"; text: string };
 export type LlmImagePart = { type: "image"; url: string; detail?: "auto" | "low" | "high" };
-export type LlmContent = string | Array<LlmTextPart | LlmImagePart>;
+export type LlmFilePart = { type: "file"; data: string; filename: string };
+export type LlmContent = string | Array<LlmTextPart | LlmImagePart | LlmFilePart>;
 
 export interface LlmFunctionTool {
   name: string;

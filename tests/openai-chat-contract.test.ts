@@ -31,6 +31,14 @@ test("chat request preserves image parts and tool-result correlation", () => {
   assert.equal("apiKey" in body, false);
 });
 
+test("chat requests reject direct file parts instead of silently dropping them", () => {
+  const request: LlmRequest = { messages: [{
+    role: "user",
+    content: [{ type: "text", text: "Read this" }, { type: "file", filename: "sample.pdf", data: "data:application/pdf;base64,JVBERi0=" }],
+  }] };
+  assert.throws(() => buildOpenAIChatBody(request, profile), /does not support direct file input/);
+});
+
 test("chat request respects profile token field and reasoning without mutating input", () => {
   const request: LlmRequest = { messages: [{ role: "user", content: "Hello" }], maxTokens: 128 };
   const before = structuredClone(request);

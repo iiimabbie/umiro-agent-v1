@@ -34,7 +34,7 @@ Umiro 透過可設定的 LLM 連線 profile 執行不綁定特定協議的 agent
 ## 系統需求
 
 - Node.js 24 以上版本及 npm
-- OpenAI API key，或任何支援 function calling 並實作 `POST /v1/chat/completions` 的 endpoint
+- OpenAI API key，或任何支援 function calling 並實作 `POST /v1/chat/completions` 或 `POST /v1/responses` 的相容 endpoint
 - 若要使用 Discord 前端，需要 Discord application token
 - Linux 與 systemd：非必要，但建議用來將 gateway 作為服務執行
 
@@ -121,7 +121,7 @@ llm:
 
 **連線 profiles。** Active profile 會分別指定 wire protocol、gateway URL、驗證方式、預設 model ID、token limit 欄位，以及可用的 hosted capabilities。建立 session 時，系統會保存當時 profile 的模型與 reasoning effort；因此 `/model` 只會更改目前 Discord session，其他頻道、討論串、私訊、CLI session 與背景 session 都會保留各自的選擇。
 
-Model ID 會透過該 session endpoint 的 `GET /models` 取得，不需要在設定中重複列出。若相容伺服器未在 discovery 結果中列出 alias，仍可手動輸入 model ID。第一個支援互動對話的 adapter 是 `openai_chat_completions`，以標準 OpenAI-compatible Chat Completions contract 為目標，而非綁定特定 gateway 實作。它支援 bearer 驗證與受信任的免驗證 endpoint，也不會預設存在供應商特有的擴充。只有 active profile 明確宣告 Responses capabilities 時，才會開放對應的 hosted 功能；Umiro 不會在背景自行切換 profile 或模型。
+Model ID 會透過該 session endpoint 的 `GET /models` 取得，不需要在設定中重複列出。若相容伺服器未在 discovery 結果中列出 alias，仍可手動輸入 model ID。正式支援互動對話的 adapters 是 `openai_chat_completions` 與 `openai_responses`。兩者都以標準 OpenAI-compatible contract 為目標，而非綁定特定 gateway 實作；支援 bearer 驗證與受信任的免驗證 endpoint，供應商特有的擴充則必須由 profile 明確宣告。只有 active profile 明確宣告 Responses capabilities 時，才會開放對應的 hosted 功能；Umiro 不會在背景自行切換 profile 或模型。
 
 ## 執行方式
 
