@@ -32,9 +32,72 @@ function extractBody(payload: { mimeType?: string | null; body?: { data?: string
   return "";
 }
 
+type MessageHeader = { name?: string | null; value?: string | null };
+
+function headerValue(headers: MessageHeader[], name: string): string {
+  const found = headers.find(h => h.name?.toLowerCase() === name.toLowerCase());
+  return found?.value?.trim() || "";
+}
+
+function headerValues(headers: MessageHeader[], name: string): string[] {
+  return headers
+    .filter(h => h.name?.toLowerCase() === name.toLowerCase())
+    .map(h => h.value?.trim() || "")
+    .filter(v => v.length > 0);
+}
+
+function extractAddress(value: string): string {
+  const angle = value.match(/<([^>]+)>/);
+  return (angle ? angle[1] : value).trim().toLowerCase();
+}
+
+/**
+ * Recipients actually reachable for this message, including forwarding hops.
+ * Mail forwarded from another account keeps the original To while Delivered-To
+ * records the mailbox it landed in, so both are needed to tell them apart.
+ */
+export function collectRecipients(headers: MessageHeader[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const name of ["To", "Delivered-To", "X-Forwarded-To"]) {
+    for (const raw of headerValues(headers, name)) {
+      for (const part of raw.split(",")) {
+        const value = part.trim();
+        if (!value) continue;
+        const key = extractAddress(value);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(value);
+      }
+    }
+  }
+  return out;
+}
+
+export function formatSearchLine(id: string, headers: MessageHeader[]): string {
+  const subject = headerValue(headers, "Subject") || "(no subject)";
+  const from = headerValue(headers, "From") || "?";
+  const date = headerValue(headers, "Date") || "?";
+  const recipients = collectRecipients(headers);
+  const to = recipients.length > 0 ? recipients.join(", ") : "?";
+  return `[${id}] ${date} | ${from} -> ${to} | ${subject}`;
+}
+
+export function formatMessageHeaderBlock(headers: MessageHeader[]): string {
+  const lines = [
+    `From: ${headerValue(headers, "From") || "?"}`,
+    `To: ${collectRecipients(headers).join(", ") || "?"}`,
+  ];
+  const cc = headerValue(headers, "Cc");
+  if (cc) lines.push(`Cc: ${cc}`);
+  lines.push(`Date: ${headerValue(headers, "Date") || "?"}`);
+  lines.push(`Subject: ${headerValue(headers, "Subject") || "(no subject)"}`);
+  return lines.join("\n");
+}
+
 export const gmailSearch: Tool = {
   name: "google_gmail_search",
-  description: "Search Gmail messages. Returns a list of matching messages with subject, from, date.",
+  description: "Search Gmail messages. Each result shows date, sender, the recipient addresses the message was actually delivered to (including forwarding hops), and subject, so mail forwarded from several mailboxes can be told apart.",
   parameters: {
     type: "object",
     properties: {
@@ -56,12 +119,14 @@ export const gmailSearch: Tool = {
 
     const results: string[] = [];
     for (const msg of messages) {
-      const detail = await gmail.users.messages.get({ userId: "me", id: msg.id!, format: "metadata", metadataHeaders: ["Subject", "From", "Date"] });
+      const detail = await gmail.users.messages.get({
+        userId: "me",
+        id: msg.id!,
+        format: "metadata",
+        metadataHeaders: ["Subject", "From", "Date", "To", "Delivered-To", "X-Forwarded-To"],
+      });
       const headers = detail.data.payload?.headers || [];
-      const subject = headers.find(h => h.name === "Subject")?.value || "(no subject)";
-      const from = headers.find(h => h.name === "From")?.value || "?";
-      const date = headers.find(h => h.name === "Date")?.value || "?";
-      results.push(`[${msg.id}] ${date} | ${from} | ${subject}`);
+      results.push(formatSearchLine(msg.id!, headers));
     }
     return results.join("\n");
   },
@@ -69,7 +134,7 @@ export const gmailSearch: Tool = {
 
 export const gmailRead: Tool = {
   name: "google_gmail_read",
-  description: "Read a specific Gmail message by ID. Returns the full text body.",
+  description: "Read a specific Gmail message by ID. Returns sender, recipient addresses (including forwarding hops), date, subject and the full text body.",
   parameters: {
     type: "object",
     properties: {
@@ -82,11 +147,8 @@ export const gmailRead: Tool = {
     const gmail = getGmail();
     const res = await gmail.users.messages.get({ userId: "me", id: message_id, format: "full" });
     const headers = res.data.payload?.headers || [];
-    const subject = headers.find(h => h.name === "Subject")?.value || "(no subject)";
-    const from = headers.find(h => h.name === "From")?.value || "?";
-    const date = headers.find(h => h.name === "Date")?.value || "?";
     const body = extractBody(res.data.payload as Parameters<typeof extractBody>[0]);
-    return `From: ${from}\nDate: ${date}\nSubject: ${subject}\n\n${body}`;
+    return `${formatMessageHeaderBlock(headers)}\n\n${body}`;
   },
 };
 
