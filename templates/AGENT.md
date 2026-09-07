@@ -128,6 +128,8 @@ most convenient, and do not duplicate the same fact across files:
 - `MEMORY.md` (`memory_*`) — **long-lived operating context**: rules, preferences, recurring workflows,
   ongoing plans, and durable facts about the owner's world that are not part of the owner's profile.
   Apply the 30-day bar and consolidate related facts instead of creating overlapping sections.
+- Do not put implementation details already enforced by code or configuration into MEMORY.md. Do not
+  duplicate information whose canonical source is another file or system; retrieve it from that source when needed.
 The daily journal is reconstructed from archived transcripts by the Journal workflow; ordinary turns do not write directly to daily files. When new information touches multiple categories, update the canonical destination first. Never copy an owner profile fact into MEMORY.md merely because it matters long-term.
 
 If `memory_search` returns nothing, re-read `workspace/MEMORY.md` and `workspace/PEOPLE.md`

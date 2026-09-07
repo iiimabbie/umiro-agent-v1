@@ -410,9 +410,9 @@ async function getOcrWorker(): Promise<Worker> {
   return ocrWorkerPromise;
 }
 
-async function imageOcr(path: string): Promise<string> {
+async function imageOcr(image: string | Buffer): Promise<string> {
   const worker = await getOcrWorker();
-  const result = await worker.recognize(path);
+  const result = await worker.recognize(image);
   return result.data.text.trim();
 }
 
@@ -463,11 +463,10 @@ async function extractDocument(path: string, contentType: string | null, name: s
     const ast = await OfficeParser.parseOffice(path, {
       fileType: fileType as never,
       extractAttachments: true,
-      ocr: true,
-      ocrConfig: {
-        language: "eng+chi_tra",
-        timeout: { workerLoad: 60_000, recognition: 60_000, autoTerminate: 15_000 },
-      },
+      // Embedded images are OCRed below with Umiro's shared Tesseract worker. Letting
+      // officeparser create its own worker would use Tesseract's default cache path (`.`)
+      // and leak traineddata files into the repository root.
+      ocr: false,
       decompressionLimits: {
         maxUncompressedBytes: 128 * 1024 * 1024,
         maxZipEntries: 5_000,
@@ -481,10 +480,17 @@ async function extractDocument(path: string, contentType: string | null, name: s
       textConfig: { preserveLayout: true, renderNotes: true },
     });
     const value = typeof rendered.value === "string" ? rendered.value : JSON.stringify(rendered.value);
-    const ocr = (ast.attachments || [])
-      .map(attachment => attachment.ocrText || "")
-      .filter(Boolean)
-      .join("\n\n");
+    const ocrParts: string[] = [];
+    for (const attachment of ast.attachments || []) {
+      if (!attachment.mimeType?.startsWith("image/") || !attachment.data) continue;
+      try {
+        const value = await imageOcr(Buffer.from(attachment.data, "base64"));
+        if (value) ocrParts.push(value);
+      } catch (error) {
+        logger.warn({ path, attachment: attachment.name, err: String(error) }, "embedded document image OCR failed");
+      }
+    }
+    const ocr = ocrParts.join("\n\n");
     return { text: value.slice(0, MAX_TEXT_BYTES).trim(), ocr: ocr.slice(0, MAX_TEXT_BYTES).trim() };
   } finally {
     clearTimeout(timer);
