@@ -41,9 +41,11 @@ export interface ResponsesWebSearchResult {
 
 function inputContent(content: LlmContent): Array<Record<string, unknown>> {
   if (typeof content === "string") return [{ type: "input_text", text: content }];
-  return content.map(part => part.type === "text"
-    ? { type: "input_text", text: part.text }
-    : { type: "input_image", image_url: part.url, ...(part.detail ? { detail: part.detail } : {}) });
+  return content.map(part => {
+    if (part.type === "text") return { type: "input_text", text: part.text };
+    if (part.type === "file") return { type: "input_file", filename: part.filename, file_data: part.data };
+    return { type: "input_image", image_url: part.url, ...(part.detail ? { detail: part.detail } : {}) };
+  });
 }
 
 function messagesToInput(messages: LlmMessage[]): { instructions?: string; input: Array<Record<string, unknown>> } {

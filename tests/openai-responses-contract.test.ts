@@ -34,7 +34,11 @@ test("responses request maps instructions, conversation items, images and tool r
     messages: [
       { role: "system", content: "System one" },
       { role: "system", content: "System two" },
-      { role: "user", content: [{ type: "text", text: "Inspect" }, { type: "image", url: "data:image/png;base64,AA==", detail: "low" }] },
+      { role: "user", content: [
+        { type: "text", text: "Inspect" },
+        { type: "image", url: "data:image/png;base64,AA==", detail: "low" },
+        { type: "file", filename: "sample.pdf", data: "data:application/pdf;base64,JVBERi0=" },
+      ] },
       { role: "assistant", content: "Working", toolCalls: [{ id: "call_1", name: "lookup", input: { query: "sample" } }] },
       { role: "tool", toolCallId: "call_1", content: "result" },
     ],
@@ -47,7 +51,11 @@ test("responses request maps instructions, conversation items, images and tool r
   assert.equal(body.max_output_tokens, 321);
   assert.deepEqual(body.reasoning, { effort: "high" });
   assert.deepEqual(body.input, [
-    { role: "user", content: [{ type: "input_text", text: "Inspect" }, { type: "input_image", image_url: "data:image/png;base64,AA==", detail: "low" }] },
+    { role: "user", content: [
+      { type: "input_text", text: "Inspect" },
+      { type: "input_image", image_url: "data:image/png;base64,AA==", detail: "low" },
+      { type: "input_file", filename: "sample.pdf", file_data: "data:application/pdf;base64,JVBERi0=" },
+    ] },
     { role: "assistant", content: [{ type: "output_text", text: "Working" }] },
     { type: "function_call", call_id: "call_1", name: "lookup", arguments: '{"query":"sample"}' },
     { type: "function_call_output", call_id: "call_1", output: "result" },

@@ -10,7 +10,7 @@ import { filterStaleOnboarding, isWorkspaceUnconfigured, removeOnboardingProtoco
 import type { ContentBlock, Message, TokenUsage, ToolActivity, AgentResponse, AgentOptions, ToolHistoryEvent } from "./types.js";
 import { generateLlmResponse } from "./llm/client.js";
 import { activeLlmProfile, sessionLlmProfile } from "./llm/profile.js";
-import type { LlmContent, LlmImagePart, LlmMessage, LlmFunctionTool, LlmProfile } from "./llm/types.js";
+import type { LlmContent, LlmFilePart, LlmImagePart, LlmMessage, LlmFunctionTool, LlmProfile } from "./llm/types.js";
 import { safeFetchBuffer } from "./utils/safe-http.js";
 import { truncateSearchText } from "./utils/search-output.js";
 import { buildUntrustedRecallSection } from "./utils/untrusted-recall.js";
@@ -129,20 +129,54 @@ async function fetchImageAsDataUrl(url: string): Promise<LlmImagePart | null> {
   }
 }
 
-/** Build OpenAI user content: plain text or text plus data-URL images. */
-async function buildUserContent(text: string, images?: string[]): Promise<LlmContent> {
-  if (!images || images.length === 0) return text;
-  const parts = await Promise.all(images.map(url => fetchImageAsDataUrl(url)));
-  const validParts = parts.filter((part): part is LlmImagePart => part !== null);
-  const failedCount = images.length - validParts.length;
-  if (failedCount > 0) logger.warn({ total: images.length, failed: failedCount }, "some images could not be fetched");
-  if (validParts.length === 0) {
-    return text + "\n\n[System note: The user attached image(s) but they could not be loaded. You have NO visual information. Do not guess or hallucinate image contents.]";
+interface DirectModelFile { url: string; name: string; contentType: string; size?: number }
+
+/** Fetch one supported document and encode it for a Responses input_file item. */
+async function fetchFileAsDataUrl(file: DirectModelFile): Promise<LlmFilePart | null> {
+  try {
+    const response = await safeFetchBuffer(file.url, { maxBytes: 20 * 1024 * 1024, idleTimeoutMs: 30_000, deadlineMs: 120_000, maxRedirects: 4 });
+    if (!response.ok) {
+      logger.warn({ url: file.url, status: response.status }, "file fetch failed (non-OK status)");
+      return null;
+    }
+    const responseType = (response.headers["content-type"] ?? file.contentType).split(";")[0].trim().toLowerCase();
+    if (responseType !== "application/pdf") {
+      logger.warn({ url: file.url, mediaType: responseType }, "file fetch returned unsupported content-type");
+      return null;
+    }
+    return {
+      type: "file",
+      filename: file.name || "document.pdf",
+      data: `data:application/pdf;base64,${response.body.toString("base64")}`,
+    };
+  } catch (err) {
+    logger.warn({ url: file.url, err: (err as Error).message }, "file fetch failed (exception)");
+    return null;
   }
-  const note = failedCount > 0
-    ? `${text}\n\n[System note: ${failedCount} of ${images.length} image(s) failed to load. Only describe successfully loaded images.]`
+}
+
+/** Build portable user content with direct images and protocol-supported files. */
+async function buildUserContent(text: string, images?: string[], files?: DirectModelFile[]): Promise<LlmContent> {
+  if ((!images || images.length === 0) && (!files || files.length === 0)) return text;
+  const [imageParts, fileParts] = await Promise.all([
+    Promise.all((images ?? []).map(url => fetchImageAsDataUrl(url))),
+    Promise.all((files ?? []).map(file => fetchFileAsDataUrl(file))),
+  ]);
+  const validImages = imageParts.filter((part): part is LlmImagePart => part !== null);
+  const validFiles = fileParts.filter((part): part is LlmFilePart => part !== null);
+  const failedImages = (images?.length ?? 0) - validImages.length;
+  const failedFiles = (files?.length ?? 0) - validFiles.length;
+  if (failedImages > 0) logger.warn({ total: images?.length ?? 0, failed: failedImages }, "some images could not be fetched");
+  if (failedFiles > 0) logger.warn({ total: files?.length ?? 0, failed: failedFiles }, "some files could not be fetched");
+  const failures = [
+    failedImages > 0 ? `${failedImages} of ${images?.length ?? 0} image(s)` : "",
+    failedFiles > 0 ? `${failedFiles} of ${files?.length ?? 0} file(s)` : "",
+  ].filter(Boolean);
+  const note = failures.length > 0
+    ? `${text}\n\n[System note: ${failures.join(" and ")} failed to load. Only use successfully loaded attachments; do not guess missing contents.]`
     : text;
-  return [{ type: "text", text: note }, ...validParts];
+  if (validImages.length === 0 && validFiles.length === 0) return note;
+  return [{ type: "text", text: note }, ...validImages, ...validFiles];
 }
 
 /** Convert durable legacy content blocks to portable chat content. Provider protocol,
@@ -471,7 +505,7 @@ async function askInContext(prompt: string | null, options: AgentOptions = {}): 
         && message.content.startsWith("[System] Tools actually executed in the preceding assistant turn")) continue;
 
       if (isLast && message.role === "user" && typeof message.content === "string") {
-        messages.push({ role: "user", content: await buildUserContent(message.content + hook, options.images) });
+        messages.push({ role: "user", content: await buildUserContent(message.content + hook, options.images, requestProfile.protocol === "openai_responses" ? options.files : undefined) });
         continue;
       }
       const content = durableContentToLlmContent(message.content);
@@ -483,7 +517,7 @@ async function askInContext(prompt: string | null, options: AgentOptions = {}): 
       }
     }
   } else if (prompt !== null) {
-    messages.push({ role: "user", content: await buildUserContent(prompt + hook, options.images) });
+    messages.push({ role: "user", content: await buildUserContent(prompt + hook, options.images, requestProfile.protocol === "openai_responses" ? options.files : undefined) });
   }
 
   // Text used by the deterministic matcher: the freshest user intent. Prefer the
@@ -513,7 +547,7 @@ async function askInContext(prompt: string | null, options: AgentOptions = {}): 
     for (const pending of pendingInputs) {
       session?.append(pending.message);
       const text = typeof pending.message.content === "string" ? pending.message.content : "";
-      messages.push({ role: "user", content: await buildUserContent(text, pending.images) });
+      messages.push({ role: "user", content: await buildUserContent(text, pending.images, requestProfile.protocol === "openai_responses" ? pending.files : undefined) });
       if (text) matchText = text;
     }
     return pendingInputs.length;

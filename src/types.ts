@@ -131,6 +131,8 @@ export interface AgentOptions {
   onToolUse?: (tool: string, input: Record<string, unknown>) => void;
   onProgress?: (event: ProgressEvent) => void;
   images?: string[];
+  /** Files that the active protocol can pass directly to the model for this turn. */
+  files?: Array<{ url: string; name: string; contentType: string; size?: number }>;
   trigger?: TriggerSource;
   /** 發話的 Discord 使用者 ID，供 tools.bash_allowed_users 判定用 */
   userId?: string;
@@ -140,7 +142,7 @@ export interface AgentOptions {
   runControl?: {
     signal?: AbortSignal;
     isStopRequested: () => boolean;
-    drainPendingInputs: () => Array<{ message: Message; images?: string[] }>;
-    drainPendingInputsOrSeal: () => Array<{ message: Message; images?: string[] }>;
+    drainPendingInputs: () => Array<{ message: Message; images?: string[]; files?: Array<{ url: string; name: string; contentType: string; size?: number }> }>;
+    drainPendingInputsOrSeal: () => Array<{ message: Message; images?: string[]; files?: Array<{ url: string; name: string; contentType: string; size?: number }> }>;
   };
 }

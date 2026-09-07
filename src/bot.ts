@@ -893,6 +893,7 @@ export async function startBot(token: string, beforeCommandRegistration?: () => 
             ...(fmt.attachments?.length ? { attachments: fmt.attachments } : {}),
           },
           images: fmt.images,
+          files: fmt.files,
           order: message.id,
         });
         if (accepted) {
@@ -961,7 +962,7 @@ export async function startBot(token: string, beforeCommandRegistration?: () => 
 
       if (!isTrigger) return;
 
-      await handleTrigger(message, session, fmt.images);
+      await handleTrigger(message, session, fmt.images, fmt.files);
     }).catch(async err => {
       logger.error({ err, sessionId, messageId: message.id }, "queued Discord message handling failed before agent delivery");
       if (isTrigger) {
@@ -984,6 +985,7 @@ interface FormattedMessage {
   msgId: string;
   replyTo?: string;
   images?: string[];
+  files?: Array<{ url: string; name: string; contentType: string; size?: number }>;
   attachments?: AttachmentReference[];
 }
 
@@ -1008,6 +1010,16 @@ async function formatIncomingMessage(message: Message, sessionId: string): Promi
   const toModelImageUrl = (attachment: ExtractedMessageAttachment): string =>
     boundedImageUrl(attachment.url, attachment.width, attachment.height);
   const images = attachments.filter(isImage).map(toModelImageUrl);
+  const isPdf = (attachment: { url: string; contentType?: string; name?: string }) =>
+    attachment.contentType?.split(";")[0].trim().toLowerCase() === "application/pdf"
+    || (attachment.name || new URL(attachment.url).pathname).toLowerCase().endsWith(".pdf");
+  const toModelFile = (attachment: ExtractedMessageAttachment) => ({
+    url: attachment.url,
+    name: attachment.name || "document.pdf",
+    contentType: "application/pdf",
+    ...(typeof attachment.size === "number" ? { size: attachment.size } : {}),
+  });
+  const files = attachments.filter(isPdf).map(toModelFile);
   const indexInputs: RemoteAttachmentInput[] = attachments.map(item => ({ ...item, relation: "upload" }));
 
   // reply 的訊息如果有圖片，也加進來；另保留 reference metadata，
@@ -1017,6 +1029,7 @@ async function formatIncomingMessage(message: Message, sessionId: string): Promi
       const replied = await message.channel.messages.fetch(message.reference.messageId);
       const replyAttachments = extractMessageAttachments(replied);
       images.push(...replyAttachments.filter(isImage).map(toModelImageUrl));
+      files.push(...replyAttachments.filter(isPdf).map(toModelFile));
       indexInputs.push(...replyAttachments.map(item => ({ ...item, relation: "reply_reference" as const })));
     } catch { /* replied message not available */ }
   }
@@ -1034,6 +1047,7 @@ async function formatIncomingMessage(message: Message, sessionId: string): Promi
     msgId: message.id,
     ...(message.reference?.messageId ? { replyTo: message.reference.messageId } : {}),
     ...(images.length > 0 ? { images: [...new Set(images)] } : {}),
+    ...(files.length > 0 ? { files: [...new Map(files.map(file => [file.url, file])).values()] } : {}),
     ...(attachmentReferences.length > 0 ? { attachments: attachmentReferences } : {}),
   };
 }
@@ -1110,7 +1124,12 @@ function storeInlineImageDescriptions(session: Session, text: string, imageCount
   }
 }
 
-async function handleTrigger(message: Message, session: Session, images?: string[]): Promise<void> {
+async function handleTrigger(
+  message: Message,
+  session: Session,
+  images?: string[],
+  files?: Array<{ url: string; name: string; contentType: string; size?: number }>,
+): Promise<void> {
   logger.info({
     sessionId: session.id,
     author: message.author.tag,
@@ -1197,6 +1216,7 @@ async function handleTrigger(message: Message, session: Session, images?: string
       session,
       systemPrompt: channelContext,
       images,
+      files,
       onProgress,
       trigger: peopleVisibility === "owner" ? "discord-owner" : "discord-other",
       userId: message.author.id,
