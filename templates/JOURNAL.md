@@ -100,10 +100,6 @@ The **archived sessions are the ground truth** for the daily journal. The existi
      voice is whatever your persona is — do not flatten it here.
    - Ground every reaction and feeling in what actually happened that day. Do not invent
      moods, opinions, or events to make the entry feel more personal.
-   - **Always include community / social interaction and interesting conversations** — even
-     pure chatter with no long-term value belongs here; the diary is about continuity, so
-     tomorrow's session can pick up what happened. Do not drop a conversation just because
-     it wasn't worth saving to long-term memory.
    - Remove: raw timestamps (`[HH:MM:SS]`), duplicate summaries, repeated recaps, operational
      logs, and routine weather forecasts (keep genuine weather *events* like typhoons).
    - Redact secrets: never write API keys / tokens / passwords into the diary — replace the
