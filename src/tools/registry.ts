@@ -10,6 +10,7 @@ import {
 } from "./metadata.js";
 import { createToolCatalog } from "./builtin/tool-catalog.js";
 import type { PluginToolRegistration } from "./plugin-types.js";
+import { TOOL_INTENTS, intentKeywords } from "./intents.js";
 
 const OWNER_ONLY_TOOLS = new Set([
   // write_file 沒有路徑邊界，寫得進 src/ 就等於繞過 bash 的 owner-only。
@@ -98,61 +99,61 @@ const baseRegistrations: ToolRegistration[] = [
   reg(codeExecutionUnavailable, "native", "code-execution", { capability: "hosted_code_execution" }),
 
   // ── match: general & memory ──
-  reg(weather, "match", "weather", { keywords: ["天氣", "氣溫", "下雨", "weather", "forecast", "溫度"] }),
-  reg(memoryList, "match", "memory-people", { keywords: ["記憶檔", "記憶列表", "memory list", "列出記憶"] }),
-  reg(memoryAdd, "match", "memory-people", { keywords: ["長期記憶", "記住", "memory", "記下來", "永久記憶"] }),
-  reg(memoryReplace, "match", "memory-people", { keywords: ["更新記憶", "修改記憶", "memory", "改記憶"] }),
-  reg(memoryRemove, "match", "memory-people", { keywords: ["刪記憶", "移除記憶", "忘記", "memory"] }),
-  reg(peopleRemove, "match", "memory-people", { keywords: ["刪除人物", "移除某人", "people"] }),
+  reg(weather, "match", "weather", { keywords: intentKeywords(TOOL_INTENTS.weather) }),
+  reg(memoryList, "match", "memory-people", { keywords: intentKeywords(TOOL_INTENTS.memoryList) }),
+  reg(memoryAdd, "match", "memory-people", { keywords: intentKeywords(TOOL_INTENTS.memoryAdd) }),
+  reg(memoryReplace, "match", "memory-people", { keywords: intentKeywords(TOOL_INTENTS.memoryReplace) }),
+  reg(memoryRemove, "match", "memory-people", { keywords: intentKeywords(TOOL_INTENTS.memoryRemove) }),
+  reg(peopleRemove, "match", "memory-people", { keywords: intentKeywords(TOOL_INTENTS.peopleRemove) }),
 
   // ── match: schedules ──
-  reg(cronCreate, "match", "schedules", { keywords: ["排程", "cron", "每天", "每週", "每周", "定時", "schedule", "recurring"], aliases: ["定期任務"], signals: ["hasDateTime"] }),
-  reg(cronList, "match", "schedules", { keywords: ["排程", "cron", "排程列表", "schedule"] }),
-  reg(cronDelete, "match", "schedules", { keywords: ["刪排程", "取消排程", "cron", "刪除排程"] }),
-  reg(cronToggle, "match", "schedules", { keywords: ["停用排程", "啟用排程", "cron"] }),
-  reg(cronUpdate, "match", "schedules", { keywords: ["改排程", "更新排程", "cron"] }),
-  reg(reminderCreate, "match", "schedules", { keywords: ["提醒", "remind", "reminder", "提醒我", "幾點叫我", "叫我"], aliases: ["提醒我"], signals: ["hasDateTime"] }),
-  reg(reminderList, "match", "schedules", { keywords: ["提醒列表", "reminder", "列出提醒"] }),
-  reg(reminderDelete, "match", "schedules", { keywords: ["刪提醒", "取消提醒", "reminder"] }),
+  reg(cronCreate, "match", "schedules", { keywords: intentKeywords(TOOL_INTENTS.cronCreate, TOOL_INTENTS.cronBase), aliases: ["定期任務", "定时任务", "定期実行", "정기 작업"], signals: ["hasDateTime"] }),
+  reg(cronList, "match", "schedules", { keywords: intentKeywords(TOOL_INTENTS.cronList, TOOL_INTENTS.cronBase) }),
+  reg(cronDelete, "match", "schedules", { keywords: intentKeywords(TOOL_INTENTS.cronDelete) }),
+  reg(cronToggle, "match", "schedules", { keywords: intentKeywords(TOOL_INTENTS.cronToggle) }),
+  reg(cronUpdate, "match", "schedules", { keywords: intentKeywords(TOOL_INTENTS.cronUpdate) }),
+  reg(reminderCreate, "match", "schedules", { keywords: intentKeywords(TOOL_INTENTS.reminderCreate), aliases: ["提醒我", "remind me", "リマインドして", "알림 설정"], signals: ["hasDateTime"] }),
+  reg(reminderList, "match", "schedules", { keywords: intentKeywords(TOOL_INTENTS.reminderList) }),
+  reg(reminderDelete, "match", "schedules", { keywords: intentKeywords(TOOL_INTENTS.reminderDelete) }),
 
   // ── match: discord messages ──
-  reg(discordFetchMessage, "match", "discord-messages", { keywords: ["訊息", "message", "抓訊息", "fetch"] }),
-  reg(discordFetchChannelMessages, "match", "discord-messages", { keywords: ["頻道訊息", "channel", "抓訊息", "歷史訊息"] }),
-  reg(discordSendMessage, "match", "discord-messages", { keywords: ["發訊息", "傳訊息", "send message", "發送"] }),
-  reg(discordSendButtons, "match", "discord-messages", { keywords: ["按鈕", "button", "確認", "拒絕", "修改", "互動元件"] }),
-  reg(discordPin, "match", "discord-messages", { keywords: ["釘選", "pin", "置頂"] }),
-  reg(discordUnpin, "match", "discord-messages", { keywords: ["取消釘選", "unpin", "取消置頂"] }),
-  reg(discordCreateThread, "match", "discord-messages", { keywords: ["討論串", "thread", "開串"] }),
-  reg(discordCreateForumPost, "match", "discord-messages", { keywords: ["論壇", "forum", "貼文", "發文"] }),
-  reg(discordEditMessage, "match", "discord-messages", { keywords: ["編輯訊息", "edit message", "改訊息"] }),
-  reg(discordArchiveThread, "match", "discord-messages", { keywords: ["封存", "archive", "討論串"] }),
+  reg(discordFetchMessage, "match", "discord-messages", { keywords: intentKeywords(TOOL_INTENTS.discordFetchMessage) }),
+  reg(discordFetchChannelMessages, "match", "discord-messages", { keywords: intentKeywords(TOOL_INTENTS.discordFetchChannel) }),
+  reg(discordSendMessage, "match", "discord-messages", { keywords: intentKeywords(TOOL_INTENTS.discordSendMessage) }),
+  reg(discordSendButtons, "match", "discord-messages", { keywords: intentKeywords(TOOL_INTENTS.discordButtons) }),
+  reg(discordPin, "match", "discord-messages", { keywords: intentKeywords(TOOL_INTENTS.discordPin) }),
+  reg(discordUnpin, "match", "discord-messages", { keywords: intentKeywords(TOOL_INTENTS.discordUnpin) }),
+  reg(discordCreateThread, "match", "discord-messages", { keywords: intentKeywords(TOOL_INTENTS.discordThread) }),
+  reg(discordCreateForumPost, "match", "discord-messages", { keywords: intentKeywords(TOOL_INTENTS.discordForum) }),
+  reg(discordEditMessage, "match", "discord-messages", { keywords: intentKeywords(TOOL_INTENTS.discordEdit) }),
+  reg(discordArchiveThread, "match", "discord-messages", { keywords: intentKeywords(TOOL_INTENTS.discordArchive) }),
 
   // ── match: google calendar (non-delete) ──
-  reg(calendarListEvents, "match", "google-calendar", { keywords: ["行程", "日曆", "會議", "活動", "calendar", "event", "行事曆"], signals: ["hasDateTime"] }),
-  reg(calendarCreateEvent, "match", "google-calendar", { keywords: ["建立行程", "新增活動", "calendar", "event", "加行程"] }),
-  reg(calendarUpdateEvent, "match", "google-calendar", { keywords: ["改行程", "更新活動", "calendar", "event"] }),
+  reg(calendarListEvents, "match", "google-calendar", { keywords: intentKeywords(TOOL_INTENTS.calendarList), signals: ["hasDateTime"] }),
+  reg(calendarCreateEvent, "match", "google-calendar", { keywords: intentKeywords(TOOL_INTENTS.calendarCreate) }),
+  reg(calendarUpdateEvent, "match", "google-calendar", { keywords: intentKeywords(TOOL_INTENTS.calendarUpdate) }),
 
   // ── match: gmail (non-delete) ──
-  reg(gmailSearch, "match", "google-gmail", { keywords: ["信", "郵件", "email", "gmail", "查信", "收件匣"] }),
-  reg(gmailRead, "match", "google-gmail", { keywords: ["讀信", "郵件內容", "email", "gmail"] }),
-  reg(gmailSend, "match", "google-gmail", { keywords: ["寄信", "寄給", "send email", "gmail", "發信"] }),
-  reg(gmailCreateDraft, "match", "google-gmail", { keywords: ["草稿", "draft", "email", "gmail"] }),
+  reg(gmailSearch, "match", "google-gmail", { keywords: intentKeywords(TOOL_INTENTS.gmailSearch) }),
+  reg(gmailRead, "match", "google-gmail", { keywords: intentKeywords(TOOL_INTENTS.gmailRead) }),
+  reg(gmailSend, "match", "google-gmail", { keywords: intentKeywords(TOOL_INTENTS.gmailSend) }),
+  reg(gmailCreateDraft, "match", "google-gmail", { keywords: intentKeywords(TOOL_INTENTS.gmailDraft) }),
 
   // ── match: google drive ──
-  reg(driveSearch, "match", "google-drive", { keywords: ["雲端", "drive", "文件搜尋", "檔案搜尋", "找檔案"] }),
-  reg(driveRead, "match", "google-drive", { keywords: ["讀文件", "drive", "雲端內容", "讀雲端"] }),
-  reg(driveUpload, "match", "google-drive", { keywords: ["上傳", "upload", "drive", "雲端", "存雲端"] }),
+  reg(driveSearch, "match", "google-drive", { keywords: intentKeywords(TOOL_INTENTS.driveSearch) }),
+  reg(driveRead, "match", "google-drive", { keywords: intentKeywords(TOOL_INTENTS.driveRead) }),
+  reg(driveUpload, "match", "google-drive", { keywords: intentKeywords(TOOL_INTENTS.driveUpload) }),
 
   // ── match: google tasks ──
-  reg(tasksList, "match", "google-tasks", { keywords: ["待辦", "task", "任務清單", "tasks"] }),
-  reg(tasksCreate, "match", "google-tasks", { keywords: ["新增待辦", "加任務", "task", "tasks"] }),
-  reg(tasksComplete, "match", "google-tasks", { keywords: ["完成待辦", "完成任務", "task", "tasks"] }),
+  reg(tasksList, "match", "google-tasks", { keywords: intentKeywords(TOOL_INTENTS.tasksList) }),
+  reg(tasksCreate, "match", "google-tasks", { keywords: intentKeywords(TOOL_INTENTS.tasksCreate) }),
+  reg(tasksComplete, "match", "google-tasks", { keywords: intentKeywords(TOOL_INTENTS.tasksComplete) }),
 
   // ── match: other explicit-intent ──
-  reg(imageGen, "match", "image-generation", { capability: "hosted_image_generation", keywords: ["生成圖片", "生圖", "畫一張", "幫我畫", "繪圖", "插圖", "照片", "自拍", "image", "圖片", "去背", "移除背景"], signals: ["hasImageEditRequest"] }),
-  reg(sessionSearch, "match", "history-journal", { keywords: ["搜尋對話", "歷史對話", "session search", "找對話", "以前說過"] }),
-  reg(skillList, "match", "skills", { keywords: ["技能", "skill", "skill list", "列出技能"] }),
-  reg(usageDashboard, "match", "usage", { keywords: ["用量", "usage", "儀表板", "dashboard", "統計", "花費"] }),
+  reg(imageGen, "match", "image-generation", { capability: "hosted_image_generation", keywords: intentKeywords(TOOL_INTENTS.imageGeneration), signals: ["hasImageEditRequest"] }),
+  reg(sessionSearch, "match", "history-journal", { keywords: intentKeywords(TOOL_INTENTS.sessionSearch) }),
+  reg(skillList, "match", "skills", { keywords: intentKeywords(TOOL_INTENTS.skillList) }),
+  reg(usageDashboard, "match", "usage", { keywords: intentKeywords(TOOL_INTENTS.usage) }),
 
   // ── index: known-but-not-schema ──
   reg(sessionsByDate, "index", "history-journal"),

@@ -1,5 +1,6 @@
 import type { Tool } from "../types.js";
 import type { LlmCapability } from "../llm/types.js";
+import { DATE_TIME_INTENTS, IMAGE_EDIT_INTENTS } from "./intents.js";
 
 /**
  * Tool exposure level — controls how much the model sees about a tool each turn.
@@ -29,7 +30,7 @@ export interface ToolRegistration {
   exposure: ExposureLevel;
   /** Capability group; also used for <tool-index> grouping and matcher group hits. */
   group: string;
-  /** Chinese + English keywords that make this tool match a prompt. */
+  /** Natural-language intent phrases that make this tool match a prompt. */
   keywords?: string[];
   /** Alternate names/phrases; an exact mention counts as a direct hit. */
   aliases?: string[];
@@ -93,14 +94,17 @@ export interface MatchSignal {
  * via the clock-time / 幾點 / schedule keywords ("今天下午三點提醒我").
  */
 export function detectSignals(prompt: string, hasAttachment: boolean): MatchSignal {
+  const normalized = normalizeForMatch(prompt);
   return {
     hasDateTime:
       /\d{1,2}[:：]\d{2}/.test(prompt) ||
       /\d{4}-\d{2}-\d{2}/.test(prompt) ||
-      /(明天|後天|下週|下周|每天|每週|每周|幾點|點叫我|tomorrow|每月|下個月|下禮拜|禮拜[一二三四五六日天])/i.test(prompt),
+      DATE_TIME_INTENTS.some(phrase => normalized.includes(normalizeForMatch(phrase))) ||
+      /(禮拜|星期|周)[一二三四五六日天]/.test(prompt) ||
+      /(曜日|월요일|화요일|수요일|목요일|금요일|토요일|일요일)/i.test(prompt),
     hasAttachment,
     hasImageEditRequest: hasAttachment &&
-      /(去背|移除背景|去掉背景|背景去掉|換背景|修改圖片|編輯圖片|修圖|edit (?:this )?(?:image|photo)|remove (?:the )?background)/i.test(prompt),
+      IMAGE_EDIT_INTENTS.some(phrase => normalized.includes(normalizeForMatch(phrase))),
   };
 }
 

@@ -1054,13 +1054,16 @@ owner 稍後在同頻道觸發時 trigger 是 `discord-owner`、權限全開，�
   `memory_search` / `people_add` / `people_update` / `discord_react` /
   `discord_attach_to_reply`）。`web_fetch` 與顯式 web/code capability tools 同樣由 registry 管理
 - **`match`** — 由 `matchTools()` 這個 **deterministic** matcher（不另呼叫 LLM）
-  依當輪 prompt 的中英文 keyword、alias、名稱，或工具明確宣告的日期時間／圖片附件 signal 命中才送。
+  依當輪 prompt 的自然語言 intent phrase、alias、名稱，或工具明確宣告的日期時間／圖片附件 signal 命中才送。
+  內建工具的常用繁中、簡中、英文、日文與韓文說法集中在 `tools/intents.ts`，registry 只引用共用 intent pack；
+  同一份 metadata 也供 `tool_catalog.search` 搜尋，不在兩處維護翻譯。
   命中有上限 `config.tools.exposure.max_matched_tools`（預設 12，clamp 1–50，native 不計入），
-  排序 exact name/alias > 多 keyword > 單 keyword/signal。
+  排序 exact name/alias > 多 phrase > 單 phrase/signal。
   signal 必須由每個工具在 registry 明確宣告；目前 `hasDateTime` 用於排程／日曆候選，
-  `hasImageEditRequest`（附件加上修圖語意）用於圖片編輯；
+  `hasImageEditRequest`（附件加上修圖語意）用於圖片編輯；兩者也使用相同五種語言的 intent phrase。
   `hasAttachment` 保留給確實需要所有圖片附件的外掛。
-  圖片關鍵字使用「幫我畫」「畫一張」等詞組，不使用單字「畫」，避免「計畫」誤觸
+  matcher 優先使用具操作語意的短句，不使用「畫」「信」「image」等高歧義單字；
+  生圖 pack 另涵蓋「圖呢／where is the image／さっきの画像／아까 그 이미지」等常見延續追問
 - **`index`** — 不送 schema，只在 `<tool-index>` 列出所屬能力群，需要時走 `tool_catalog`
 - **`on-demand`** — 不進 `<tool-index>`，只有使用者點名或 `tool_catalog.search` 才找得到；
   給破壞性 / 不可逆 / 極低頻工具（delete 類、soul_guardian approve/restore、skill install/uninstall）
