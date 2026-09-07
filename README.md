@@ -34,7 +34,7 @@ For architecture and data flow, see [docs/DESIGN.md](docs/DESIGN.md). Tool activ
 ## Requirements
 
 - Node.js 24 or newer, and npm
-- An OpenAI API key, or any endpoint implementing `POST /v1/chat/completions` with function calling
+- An OpenAI API key, or a compatible endpoint implementing `POST /v1/chat/completions` or `POST /v1/responses` with function calling
 - A Discord application token, if you want the Discord front end
 - Linux with systemd — optional, but recommended for running the gateway as a service
 
@@ -121,7 +121,7 @@ llm:
 
 **Connection profiles.** The active profile independently selects the wire protocol, gateway URL, authentication, default model ID, token-limit field, and hosted capabilities. Each session snapshots that profile's model and reasoning effort when created, so `/model` changes only the current Discord session — other channels, threads, DMs, CLI sessions, and background sessions keep their own selection.
 
-Model IDs are discovered from the session's endpoint through `GET /models`, never duplicated in config; manually entered IDs stay allowed for compatible servers that omit aliases from discovery. The first supported interactive adapter is `openai_chat_completions`, targeting the standard OpenAI-compatible Chat Completions contract rather than any one gateway implementation. It supports bearer-authenticated and trusted unauthenticated endpoints; provider-specific extensions are not assumed. Hosted Responses capabilities are exposed only when the active profile declares them — Umiro never silently switches profile or model.
+Model IDs are discovered from the session's endpoint through `GET /models`, never duplicated in config; manually entered IDs stay allowed for compatible servers that omit aliases from discovery. The supported interactive adapters are `openai_chat_completions` and `openai_responses`. Both target their standard OpenAI-compatible contracts rather than any one gateway implementation, support bearer-authenticated and trusted unauthenticated endpoints, and keep provider-specific extensions behind explicit profile capabilities. Hosted Responses capabilities are exposed only when the active profile declares them — Umiro never silently switches profile or model.
 
 ## Running
 
