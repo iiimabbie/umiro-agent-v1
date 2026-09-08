@@ -119,7 +119,7 @@ llm:
 
 `timezone` drives timestamps, memory filenames, and journal dates. Leaving it empty uses the host timezone.
 
-**Connection profiles.** The active profile independently selects the wire protocol, gateway URL, authentication, default model ID, token-limit field, and hosted capabilities. Each session snapshots that profile's model and reasoning effort when created, so `/model` changes only the current Discord session — other channels, threads, DMs, CLI sessions, and background sessions keep their own selection.
+**Connection profiles.** The active profile independently selects the wire protocol, gateway URL, authentication, default model ID, token-limit field, and hosted capabilities. A new channel session snapshots that profile's model and reasoning effort. `/model` changes only the current Discord channel, thread, or DM; its model, reasoning effort, and queue choice persist across `/new` and daily journal archiving, while other channels, threads, DMs, CLI sessions, and background sessions keep their own selection.
 
 Model IDs are discovered from the session's endpoint through `GET /models`, never duplicated in config; manually entered IDs stay allowed for compatible servers that omit aliases from discovery. The supported interactive adapters are `openai_chat_completions` and `openai_responses`. Both target their standard OpenAI-compatible contracts rather than any one gateway implementation, support bearer-authenticated and trusted unauthenticated endpoints, and keep provider-specific extensions behind explicit profile capabilities. Hosted Responses capabilities are exposed only when the active profile declares them — Umiro never silently switches profile or model.
 

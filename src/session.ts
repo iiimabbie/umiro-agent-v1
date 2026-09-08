@@ -284,22 +284,25 @@ export class Session {
     }
   }
 
+  /**
+   * Clear conversation state after a durable archive while retaining the channel's
+   * selected model and queue settings. `/model` is a channel preference, not part
+   * of a single conversation transcript, so `/new` and the daily journal must not
+   * silently fall back to the active-profile default.
+   */
   clear(): void {
-    const previous = { modelSettings: this.modelSettings, messages: this.messages, usage: this.usage, toolHistory: this.toolHistory };
-    const defaults = defaultSessionModelSettings(loadConfig());
-    this.modelSettings = { ...defaults, revision: this.modelSettings.revision + 1 };
+    const previous = { messages: this.messages, usage: this.usage, toolHistory: this.toolHistory };
     this.messages = [];
     this.usage = { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 };
     this.toolHistory = [];
     try { this.save(); }
     catch (error) {
-      this.modelSettings = previous.modelSettings;
       this.messages = previous.messages;
       this.usage = previous.usage;
       this.toolHistory = previous.toolHistory;
       throw error;
     }
-    logger.info({ sessionId: this.id }, "session cleared");
+    logger.info({ sessionId: this.id, model: this.modelSettings.model }, "session cleared while preserving settings");
   }
 
   archive(): string | null {

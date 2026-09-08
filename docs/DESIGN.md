@@ -150,8 +150,7 @@ provider 的 wire format 差異全部關在 `llm/adapters/` 裡。
 合成 immutable request profile，再綁進 AsyncLocalStorage。同一請求的主對話、compaction、
 attachment vision，以及 hosted web/image/code capability 都沿用這份 profile。
 
-`/model` 只更新目前 Discord session 的 model 與 reasoning effort，
-不改 connection profile 的 protocol、endpoint、auth、capability，也不影響其他 session。
+`/model` 只更新目前 Discord channel／thread／DM 的 model 與 reasoning effort。模型與 queue override 是該 channel 的持續設定：`/new` 和每日 journal 歸檔只清除對話、用量與工具歷史，不重設它們；只有新 channel 才從 active profile 建立預設值。它不改 connection profile 的 protocol、endpoint、auth、capability，也不影響其他 session。
 
 OpenAI Chat adapter 依 profile 的 `tokenLimitField` 選擇 `max_completion_tokens` 或 `max_tokens`。OpenAI Responses adapter 則使用 `instructions`、conversation input items、`function_call`／`function_call_output` 與 `max_output_tokens`，支援 `input_image` 與 base64 `input_file`，並將 output items、usage 與 incomplete reason 正規化成同一份 normalized contract。
 `reasoningEffort: default` 不送 reasoning 欄位，其餘值以 `reasoning_effort` 傳給相容 endpoint。
@@ -579,7 +578,7 @@ summary 只是 active context cache，帶 `isCompactSummary`，不是原始歷�
 1. Silent memory flush：注入 flush 指令到 systemPrompt，讓 agent 自由使用 memory tools 整理記憶
 2. 原始 messages、usage 與 `toolHistory` 歸檔到 `workspace/sessions/archive/`；
    SQLite 只作搜尋索引，JSON 是耐久的 source of truth
-3. 清空 active session
+3. 清空 active session 的 messages、usage 與 `toolHistory`，但保留 channel 已選擇的 model、reasoning effort 與 queue override
 
 ### 搜尋投影與 reconciliation
 
