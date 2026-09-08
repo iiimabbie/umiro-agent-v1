@@ -1560,3 +1560,21 @@ Gateway 啟動時會 idempotently reconcile 三份 workspace profile；未變動
 Schema migration 2 in `src/db.ts` removes obsolete diary-note search projections transactionally on first startup. It preserves daily files, archived transcripts, and normal diary documents. Retain this migration while upgrades from databases predating version 2 are supported; remove it only after that upgrade path is retired.
 
 Existing installations must update the Memory Hook, Session Summarize, and Daily Journal sections in `workspace/JOURNAL.md`, and Knowledge Persistence in `workspace/AGENT.md`, before restarting. Templates do not overwrite customized workspace files automatically. Preserve unrelated local instructions. Ordinary turns no longer append daily annotations; scheduled Journal remains enabled.
+
+## Foreground Run Checkpoint 與中斷恢復
+
+Discord foreground `ask()` request 以 active session 內的 `runCheckpoint` 保存一份 bounded、可跨程序重啟的恢復交接。它不是完整 LLM replay log，也不取代不可變的 `toolHistory`：用途是避免 Responses transport／provider error 讓下一輪完全失去已完成工作的脈絡。
+
+生命週期：
+
+1. request 開始時，先讀取前一個未清理 checkpoint，再建立本輪 `active` checkpoint；
+2. assistant 在 tool turn 間產生的進度文字與每個已完成 local tool 的 bounded input／result evidence 會在安全邊界後原子保存；
+3. request 拋出非取消例外時標成 `failed`，保存錯誤名稱與訊息；
+4. 同 session 下一輪把前一 checkpoint 以 `<interrupted-run-checkpoint>` 注入 system prompt，並明確標示為不可信證據、禁止自動重播工具；
+5. 最終回答完成、明確 `/stop`、`Session.clear()`（`/new`／journal archive）時清除 checkpoint。
+
+Checkpoint 有固定界線：最多保留近期 6 則進度、12 筆工具證據，單筆 input/result 分別有字元上限。完整工具輸入輸出仍只在 `toolHistory`；若 bounded evidence 不足或外部狀態可能變動，Agent 應局部重讀／驗證，而不是假設舊證據仍新鮮。
+
+這是中型可靠性修正，不是完整 durable run engine：不保存 provider 私有 reasoning、不保存完整 live provider message graph、不恢復半途 function call、不逐 token continuation，也不自動 replay 任何工具。如此可避免重複寫檔、重複傳訊等副作用，同時顯著降低普通讀檔／分析工作在 transport failure 後的重工。
+
+Discord `handleTrigger()` 遇到非 `/stop` 例外時，會刪除暫時進度訊息並送出明確失敗通知；若 failed checkpoint 已保存，通知使用者下一則訊息可接續。錯誤不再只留在 log 或以 reaction 表示。

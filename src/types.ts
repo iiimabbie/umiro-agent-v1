@@ -94,6 +94,30 @@ export interface ToolHistoryEvent {
   isError: boolean;
 }
 
+/** Bounded durable handoff for a request that ended before a final answer was delivered.
+ * It is a recovery aid, not a replay log: side-effecting tools are never re-executed
+ * automatically, and the immutable toolHistory remains the audit source of truth. */
+export interface RunCheckpointToolEvidence {
+  id: string;
+  time: string;
+  tool: string;
+  isError: boolean;
+  inputHint: string;
+  resultHint: string;
+  truncated: boolean;
+}
+
+export interface RunCheckpoint {
+  id: string;
+  status: "active" | "failed";
+  startedAt: string;
+  updatedAt: string;
+  originalTask: string;
+  progressNotes: string[];
+  toolEvidence: RunCheckpointToolEvidence[];
+  failure?: { name: string; message: string };
+}
+
 // --- Agent ---
 
 export interface ToolActivity {

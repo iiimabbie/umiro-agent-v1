@@ -5,7 +5,7 @@ import {
 import { dirname, basename } from "node:path";
 import { randomBytes } from "node:crypto";
 import { logger } from "./logger.js";
-import type { Message, SessionModelSettings, TokenUsage, ToolHistoryEvent } from "./types.js";
+import type { Message, RunCheckpoint, SessionModelSettings, TokenUsage, ToolHistoryEvent } from "./types.js";
 
 /**
  * Durable, concurrency-safe on-disk representation for a single session file.
@@ -34,6 +34,7 @@ export interface SessionData {
   messages: Message[];
   usage: TokenUsage;
   toolHistory: ToolHistoryEvent[];
+  runCheckpoint?: RunCheckpoint;
 }
 
 /** A snapshot loaded from disk, tagged with the revision it was read at. */
@@ -46,6 +47,7 @@ interface PersistedShape {
   messages?: Message[];
   usage?: TokenUsage;
   toolHistory?: ToolHistoryEvent[];
+  runCheckpoint?: RunCheckpoint;
   revision?: number;
 }
 
@@ -166,6 +168,46 @@ function normalizeModelSettings(value: SessionModelSettings | undefined): Sessio
   return { ...value, profile: value.profile.trim(), model: value.model.trim(), ...(queueMode ? { queueMode } : {}) };
 }
 
+function normalizeRunCheckpoint(value: RunCheckpoint | undefined): RunCheckpoint | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  if (typeof value.id !== "string" || !value.id
+    || (value.status !== "active" && value.status !== "failed")
+    || typeof value.startedAt !== "string"
+    || typeof value.updatedAt !== "string"
+    || typeof value.originalTask !== "string"
+    || !Array.isArray(value.progressNotes)
+    || !value.progressNotes.every(note => typeof note === "string")
+    || !Array.isArray(value.toolEvidence)) return undefined;
+
+  const toolEvidence = value.toolEvidence.filter(event => event
+    && typeof event.id === "string"
+    && typeof event.time === "string"
+    && typeof event.tool === "string"
+    && typeof event.isError === "boolean"
+    && typeof event.inputHint === "string"
+    && typeof event.resultHint === "string"
+    && typeof event.truncated === "boolean").slice(-12);
+  const failure = value.failure
+    && typeof value.failure.name === "string"
+    && typeof value.failure.message === "string"
+    ? { name: value.failure.name.slice(0, 2_000), message: value.failure.message.slice(0, 2_000) }
+    : undefined;
+  return {
+    id: value.id.slice(0, 200),
+    status: value.status,
+    startedAt: value.startedAt.slice(0, 100),
+    updatedAt: value.updatedAt.slice(0, 100),
+    originalTask: value.originalTask.slice(0, 8_000),
+    progressNotes: value.progressNotes.slice(-6).map(note => note.slice(0, 2_000)),
+    toolEvidence: toolEvidence.map(event => ({
+      id: event.id.slice(0, 200), time: event.time.slice(0, 100), tool: event.tool.slice(0, 200),
+      isError: event.isError, inputHint: event.inputHint.slice(0, 1_000),
+      resultHint: event.resultHint.slice(0, 4_000), truncated: event.truncated,
+    })),
+    ...(failure ? { failure } : {}),
+  };
+}
+
 function emptySnapshot(modelSettings: SessionModelSettings): SessionSnapshot {
   return {
     modelSettings: { ...modelSettings },
@@ -177,11 +219,13 @@ function emptySnapshot(modelSettings: SessionModelSettings): SessionSnapshot {
 }
 
 function normalize(shape: PersistedShape): SessionSnapshot {
+  const runCheckpoint = normalizeRunCheckpoint(shape.runCheckpoint);
   return {
     modelSettings: normalizeModelSettings(shape.modelSettings),
     messages: shape.messages ?? [],
     usage: shape.usage ? { ...shape.usage, reasoningTokens: shape.usage.reasoningTokens ?? 0 } : { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 },
     toolHistory: shape.toolHistory ?? [],
+    ...(runCheckpoint ? { runCheckpoint } : {}),
     revision: typeof shape.revision === "number" && shape.revision >= 0 ? shape.revision : 0,
   };
 }
@@ -210,6 +254,7 @@ function serialize(data: SessionData, revision: number): string {
     messages: data.messages,
     usage: data.usage,
     toolHistory: data.toolHistory,
+    ...(data.runCheckpoint ? { runCheckpoint: data.runCheckpoint } : {}),
     revision,
   }, null, 2);
 }
@@ -269,6 +314,17 @@ export function mergeSessionState(
 
   const messages = mergeLog("messages", base.messages, desired.messages, current.messages);
   const toolHistory = mergeLog("toolHistory", base.toolHistory, desired.toolHistory, current.toolHistory);
+
+  const localCheckpointChanged = !equal(desired.runCheckpoint, base.runCheckpoint);
+  const remoteCheckpointChanged = !equal(current.runCheckpoint, base.runCheckpoint);
+  let runCheckpoint = current.runCheckpoint;
+  if (localCheckpointChanged && !remoteCheckpointChanged) {
+    runCheckpoint = desired.runCheckpoint;
+  } else if (localCheckpointChanged && remoteCheckpointChanged) {
+    if (equal(desired.runCheckpoint, current.runCheckpoint)) runCheckpoint = current.runCheckpoint;
+    else throw new Error("concurrent session conflict while changing run checkpoint");
+  }
+
   const usage: TokenUsage = {
     inputTokens: current.usage.inputTokens + (desired.usage.inputTokens - base.usage.inputTokens),
     outputTokens: current.usage.outputTokens + (desired.usage.outputTokens - base.usage.outputTokens),
@@ -277,7 +333,7 @@ export function mergeSessionState(
   if (usage.inputTokens < 0 || usage.outputTokens < 0 || usage.reasoningTokens < 0) {
     throw new Error("concurrent session conflict produced negative usage");
   }
-  return { modelSettings, messages, usage, toolHistory };
+  return { modelSettings, messages, usage, toolHistory, ...(runCheckpoint ? { runCheckpoint } : {}) };
 }
 
 export interface CommitResult {

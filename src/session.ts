@@ -1,4 +1,5 @@
 import { mkdirSync, readdirSync, existsSync, renameSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { logger } from "./logger.js";
 import { getDb } from "./db.js";
@@ -9,7 +10,7 @@ import {
   readSnapshot,
   type SessionData,
 } from "./session-store.js";
-import type { AttachmentReference, DiscordQueueMode, Message, SessionModelSettings, TokenUsage, ToolHistoryEvent } from "./types.js";
+import type { AttachmentReference, DiscordQueueMode, Message, RunCheckpoint, RunCheckpointToolEvidence, SessionModelSettings, TokenUsage, ToolHistoryEvent } from "./types.js";
 import { loadConfig, REASONING_EFFORTS, type ReasoningEffort } from "./config.js";
 import { defaultSessionModelSettings } from "./llm/profile.js";
 import {
@@ -71,6 +72,7 @@ export class Session {
   private messages: Message[] = [];
   private usage: TokenUsage = { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 };
   private toolHistory: ToolHistoryEvent[] = [];
+  private runCheckpoint?: RunCheckpoint;
 
   /**
    * Revision + base snapshot this instance last observed on disk. `save()` performs a
@@ -99,6 +101,7 @@ export class Session {
       messages: [...this.messages],
       usage: { ...this.usage },
       toolHistory: [...this.toolHistory],
+      ...(this.runCheckpoint ? { runCheckpoint: structuredClone(this.runCheckpoint) } : {}),
     };
   }
 
@@ -271,6 +274,90 @@ export class Session {
     return this.toolHistory.slice(-limit);
   }
 
+
+  /** Return a copy of the unfinished-run handoff, if one exists. */
+  getRunCheckpoint(): RunCheckpoint | undefined {
+    return this.runCheckpoint ? structuredClone(this.runCheckpoint) : undefined;
+  }
+
+  /** Start a new foreground request after the caller captured any previous failed handoff. */
+  beginRunCheckpoint(originalTask: string, resumeFrom?: RunCheckpoint): void {
+    const now = new Date().toISOString();
+    const previous = this.runCheckpoint;
+    const inheritedNotes = resumeFrom
+      ? [`Resuming interrupted predecessor task: ${resumeFrom.originalTask}`, ...resumeFrom.progressNotes]
+      : [];
+    this.runCheckpoint = {
+      id: randomUUID(),
+      status: "active",
+      startedAt: now,
+      updatedAt: now,
+      originalTask: originalTask.slice(0, 8_000),
+      progressNotes: inheritedNotes.slice(-6).map(note => note.slice(0, 2_000)),
+      toolEvidence: resumeFrom?.toolEvidence.slice(-12) ?? [],
+    };
+    try { this.save(); }
+    catch (error) { this.runCheckpoint = previous; throw error; }
+  }
+
+  /** Persist bounded evidence after each safe agent/tool boundary. */
+  updateRunCheckpoint(event?: ToolHistoryEvent, progressNote?: string): void {
+    if (!this.runCheckpoint) return;
+    const previous = structuredClone(this.runCheckpoint);
+    const next = structuredClone(this.runCheckpoint);
+    next.updatedAt = new Date().toISOString();
+    if (progressNote?.trim()) {
+      next.progressNotes.push(progressNote.trim().slice(0, 2_000));
+      next.progressNotes = next.progressNotes.slice(-6);
+    }
+    if (event) {
+      const input = JSON.stringify(event.input).replace(/\s+/g, " ");
+      const result = event.result.trim();
+      const inputLimit = 1_000;
+      const resultLimit = 4_000;
+      const evidence: RunCheckpointToolEvidence = {
+        id: event.id,
+        time: event.time,
+        tool: event.tool,
+        isError: event.isError,
+        inputHint: input.slice(0, inputLimit),
+        resultHint: result.slice(0, resultLimit),
+        truncated: input.length > inputLimit || result.length > resultLimit,
+      };
+      next.toolEvidence.push(evidence);
+      // Keep the handoff bounded while preserving enough recent source evidence to
+      // avoid re-reading ordinary files after a transport failure.
+      next.toolEvidence = next.toolEvidence.slice(-12);
+    }
+    this.runCheckpoint = next;
+    try { this.save(); }
+    catch (error) { this.runCheckpoint = previous; throw error; }
+  }
+
+  /** Keep the bounded handoff for the next turn and record why this request stopped. */
+  failRunCheckpoint(error: unknown): void {
+    if (!this.runCheckpoint) return;
+    const previous = structuredClone(this.runCheckpoint);
+    const err = error instanceof Error ? error : new Error(String(error));
+    this.runCheckpoint = {
+      ...this.runCheckpoint,
+      status: "failed",
+      updatedAt: new Date().toISOString(),
+      failure: { name: err.name, message: err.message.slice(0, 2_000) },
+    };
+    try { this.save(); }
+    catch (saveError) { this.runCheckpoint = previous; throw saveError; }
+  }
+
+  /** Clear recovery state after final delivery, explicit cancellation, or archive/new. */
+  clearRunCheckpoint(): void {
+    if (!this.runCheckpoint) return;
+    const previous = this.runCheckpoint;
+    this.runCheckpoint = undefined;
+    try { this.save(); }
+    catch (error) { this.runCheckpoint = previous; throw error; }
+  }
+
   /** 在最後一則 assistant message 上設定 msgId */
   setLastAssistantMsgId(msgId: string): void {
     for (let i = this.messages.length - 1; i >= 0; i--) {
@@ -291,15 +378,17 @@ export class Session {
    * silently fall back to the active-profile default.
    */
   clear(): void {
-    const previous = { messages: this.messages, usage: this.usage, toolHistory: this.toolHistory };
+    const previous = { messages: this.messages, usage: this.usage, toolHistory: this.toolHistory, runCheckpoint: this.runCheckpoint };
     this.messages = [];
     this.usage = { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 };
     this.toolHistory = [];
+    this.runCheckpoint = undefined;
     try { this.save(); }
     catch (error) {
       this.messages = previous.messages;
       this.usage = previous.usage;
       this.toolHistory = previous.toolHistory;
+      this.runCheckpoint = previous.runCheckpoint;
       throw error;
     }
     logger.info({ sessionId: this.id, model: this.modelSettings.model }, "session cleared while preserving settings");
@@ -422,6 +511,7 @@ ${summary}`,
     this.messages = snapshot.messages;
     this.usage = snapshot.usage;
     this.toolHistory = snapshot.toolHistory;
+    this.runCheckpoint = snapshot.runCheckpoint;
     this.baseRevision = snapshot.revision;
     this.baseData = this.snapshotBase();
     logger.info({ sessionId: this.id, count: this.messages.length, revision: this.baseRevision }, "session loaded");
@@ -453,7 +543,7 @@ ${summary}`,
         this.filePath,
         this.baseData,
         this.baseRevision,
-        { modelSettings: this.modelSettings, messages: this.messages, usage: this.usage, toolHistory: this.toolHistory },
+        { modelSettings: this.modelSettings, messages: this.messages, usage: this.usage, toolHistory: this.toolHistory, ...(this.runCheckpoint ? { runCheckpoint: this.runCheckpoint } : {}) },
       );
       if (result.merged) {
         // Another writer advanced the file; adopt the merged result so this instance's
@@ -462,6 +552,7 @@ ${summary}`,
         this.messages = result.data.messages;
         this.usage = result.data.usage;
         this.toolHistory = result.data.toolHistory;
+        this.runCheckpoint = result.data.runCheckpoint;
       }
       this.baseRevision = result.revision;
       this.baseData = this.snapshotBase();

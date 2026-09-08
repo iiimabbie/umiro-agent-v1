@@ -1297,8 +1297,15 @@ async function handleTrigger(
       await message.reply(messagePayload("已停止。"));
     } else {
       logger.error({ err }, "discord handle trigger failed");
+      await flushChain;
       if (progressMsg) await progressMsg.delete().catch(() => {});
-      await message.react("🤕").catch(() => {});
+      const checkpointSaved = session.getRunCheckpoint()?.status === "failed";
+      const notice = checkpointSaved
+        ? "這次處理因非預期錯誤中斷，進度已保存；下一則訊息會帶著中斷前的工作證據接續，不會默默消失。"
+        : "這次處理因非預期錯誤中斷，而且進度保存失敗。請稍後再試一次。";
+      await message.reply(messagePayload(notice)).catch(replyError => {
+        logger.error({ err: replyError, sessionId: session.id }, "discord failure notice delivery failed");
+      });
     }
   } finally {
     activeRuns.finish(run);
