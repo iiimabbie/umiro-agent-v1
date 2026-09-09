@@ -187,7 +187,14 @@ export async function callResponsesWebSearch(profile: LlmProfile, query: string,
     endpoint,
     profile,
     label: "OpenAI Responses web search",
-    body: { model: profile.model, input: query, tools: [{ type: "web_search" }], max_output_tokens: maxOutputTokens },
+    body: {
+      model: profile.model,
+      // Always send structured input: some Responses-compatible backends (e.g. Claude-backed
+      // deployments) reject a bare string `input` with "messages: at least one message is required".
+      input: [{ role: "user", content: [{ type: "input_text", text: query }] }],
+      tools: [{ type: "web_search" }],
+      max_output_tokens: maxOutputTokens,
+    },
   });
   if (response.error) throw new Error(`OpenAI Responses web search failed: ${JSON.stringify(response.error).slice(0, 2000)}`);
   const text = responsesOutputText(response);

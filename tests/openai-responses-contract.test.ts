@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   OpenAIResponsesAdapter,
   buildOpenAIResponsesBody,
+  callResponsesWebSearch,
   normalizeResponsesFinishReason,
   normalizeResponsesToolCalls,
   responsesOutputText,
@@ -151,4 +152,32 @@ test("responses adapter rejects API errors and empty output", async (t) => {
   });
   await assert.rejects(new OpenAIResponsesAdapter().generate({ messages: [] }, profile), /unsupported route/);
   await assert.rejects(new OpenAIResponsesAdapter().generate({ messages: [] }, profile), /no assistant output/);
+});
+
+test("hosted web search sends structured input items, never a bare string", async (t) => {
+  let sentBody: Record<string, unknown> = {};
+  t.mock.method(globalThis, "fetch", async (url: string, init: RequestInit) => {
+    assert.equal(url, "https://example.invalid/v1/responses");
+    sentBody = JSON.parse(String(init.body)) as Record<string, unknown>;
+    return Response.json({
+      id: "resp_1",
+      status: "completed",
+      output: [{
+        type: "message",
+        content: [{
+          type: "output_text",
+          text: "Paris is the capital.",
+          annotations: [{ type: "url_citation", url: "https://example.invalid/paris", title: "Paris" }],
+        }],
+      }],
+    });
+  });
+  const result = await callResponsesWebSearch(profile, "capital of France");
+  assert.deepEqual(sentBody.input, [
+    { role: "user", content: [{ type: "input_text", text: "capital of France" }] },
+  ]);
+  assert.deepEqual(sentBody.tools, [{ type: "web_search" }]);
+  assert.equal(result.text, "Paris is the capital.");
+  assert.deepEqual(result.sources, [{ title: "Paris", url: "https://example.invalid/paris" }]);
+  assert.equal(result.responseId, "resp_1");
 });

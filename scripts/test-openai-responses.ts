@@ -37,7 +37,7 @@ try {
   const result = await callResponsesWebSearch({ name: "test", protocol: "openai_chat_completions", baseUrl: `http://127.0.0.1:${address.port}/v1`, apiKey: "test-key", auth: "bearer", model: "test-model", reasoningEffort: "default", tokenLimitField: "max_completion_tokens", capabilities: { vision: true, function_tools: true, responses: true, hosted_web_search: true, hosted_image_generation: false, hosted_code_execution: false } }, "test query", 321);
   assert.equal(receivedAuth, "Bearer test-key");
   assert.equal(receivedBody?.model, "test-model");
-  assert.equal(receivedBody?.input, "test query");
+  assert.deepEqual(receivedBody?.input, [{ role: "user", content: [{ type: "input_text", text: "test query" }] }]);
   assert.equal(receivedBody?.max_output_tokens, 321);
   assert.deepEqual(receivedBody?.tools, [{ type: "web_search" }]);
   assert.equal(result.text, "Search result");
