@@ -12,6 +12,9 @@
 
 </div>
 
+> [!IMPORTANT]
+> **This generation of ümiro is no longer maintained.** Development continues in [umiro-agent](https://github.com/iiimabbie/umiro-agent), a ground-up rewrite with a durable execution core, SQLite-backed conversations and a plugin system. This repository stays available for reference only.
+
 Umiro runs a protocol-neutral agent loop through configurable LLM connection profiles, gives it a local workspace and tools, and keeps the assistant useful across conversations — without giving up control of where its data lives.
 
 > [!WARNING]

@@ -12,6 +12,9 @@
 
 </div>
 
+> [!IMPORTANT]
+> **這一代 ümiro 已停止維護。** 開發在 [umiro-agent](https://github.com/iiimabbie/umiro-agent) 繼續——全新重寫，具備可持久化的執行核心、以 SQLite 儲存的對話與外掛系統。本 repo 僅供參考。
+
 Umiro 透過可設定的 LLM 連線 profile 執行不綁定特定協議的 agent loop，並提供本機 workspace 與工具。它能跨對話保留實用的上下文，同時讓資料儲存位置仍由使用者掌控。
 
 > [!WARNING]
