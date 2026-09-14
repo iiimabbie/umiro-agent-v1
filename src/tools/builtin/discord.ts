@@ -58,6 +58,7 @@ export const discordFetchMessage: Tool = {
         editedTimestamp: msg.editedTimestamp ? new Date(msg.editedTimestamp).toISOString() : null,
         attachments: extractMessageAttachments(msg).map(attachment => attachment.url),
         replyToMessageId: msg.reference?.messageId,
+        referenceChannelId: msg.reference?.channelId,
       }, null, 2);
     } catch (err) {
       return `Error: ${(err as Error).message}`;
@@ -503,6 +504,7 @@ export const discordFetchChannelMessages: Tool = {
           timestamp: new Date(msg.createdTimestamp).toISOString(),
           editedTimestamp: msg.editedTimestamp ? new Date(msg.editedTimestamp).toISOString() : null,
           replyToMessageId: msg.reference?.messageId ?? null,
+          referenceChannelId: msg.reference?.channelId ?? null,
           attachments: extractMessageAttachments(msg).map(attachment => attachment.url),
         };
       }));

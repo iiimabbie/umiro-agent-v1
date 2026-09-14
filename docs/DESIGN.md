@@ -959,6 +959,7 @@ Registry 輸出 protocol-neutral function definition；adapter 才轉成 provide
 | `cron_create/list/delete/toggle/update` | 排程管理 |
 | `reminder_create/list/delete` | 提醒管理 |
 | `discord_fetch_message` / `discord_fetch_channel_messages` | 抓 Discord 訊息 |
+|  | 轉發訊息會從 Discord `messageSnapshots` 讀取原文；訊息參照同時回傳 `replyToMessageId` 與 `referenceChannelId`，供跨頻道追原訊息使用 |
 | `discord_send_message` / `discord_react` / `discord_pin` / `discord_unpin` | Discord 互動 |
 | `discord_send_buttons` | 發送可自訂標籤、樣式、可操作使用者與行為的按鈕 |
 | `discord_create_thread` / `discord_create_forum_post` / `discord_archive_thread` / `discord_delete_thread` | 討論串 |

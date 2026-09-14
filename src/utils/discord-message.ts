@@ -162,6 +162,11 @@ export function extractMessageText(message: {
   content?: string | null;
   embeds?: readonly { toJSON?: () => unknown }[];
   components?: readonly { toJSON?: () => unknown }[];
+  messageSnapshots?: { values(): Iterable<{
+    content?: string | null;
+    embeds?: readonly { toJSON?: () => unknown }[];
+    components?: readonly { toJSON?: () => unknown }[];
+  }> };
 }): string {
   const texts: string[] = [];
   const addText = (value: unknown): void => {
@@ -205,6 +210,15 @@ export function extractMessageText(message: {
   };
   for (const component of message.components ?? []) {
     visitHistoricalComponent(component.toJSON ? component.toJSON() : component);
+  }
+
+  // Discord includes the original content of forwarded messages in
+  // messageSnapshots. The snapshot is a partial Message, so run the same
+  // extraction against it instead of relying on the forwarding message's
+  // usually-empty content.
+  for (const snapshot of message.messageSnapshots?.values() ?? []) {
+    const snapshotText = extractMessageText(snapshot);
+    if (snapshotText) texts.push(snapshotText);
   }
 
   return texts.join("\n");

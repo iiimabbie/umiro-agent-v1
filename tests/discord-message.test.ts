@@ -26,6 +26,19 @@ test("plugin text validation rejects empty and over-limit content", () => {
   );
 });
 
+test("forwarded message snapshots remain readable", () => {
+  const content = extractMessageText({
+    content: "",
+    messageSnapshots: {
+      values: () => [{
+        content: "forwarded text",
+        embeds: [{ toJSON: () => ({ title: "forwarded title" }) }],
+      }],
+    },
+  });
+  assert.equal(content, "forwarded text\nforwarded title");
+});
+
 test("historical Components V2 text remains readable", () => {
   const content = extractMessageText({
     content: "",
